@@ -1,0 +1,982 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yapboz Masası</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+  /* Tek görünüm: gece puzzle masası (yeşil keçe + pirinç vurgular) — bilinçli olarak tek tema */
+  :root{
+    color-scheme: dark;
+    --ink:#101816;
+    --panel:#17221f;
+    --panel-2:#1f2d29;
+    --line:#2d403a;
+    --felt:#2a5247;
+    --felt-deep:#173029;
+    --text:#edf1ea;
+    --muted:#98aea5;
+    --brass:#e2ae4a;
+    --brass-hi:#f0c46e;
+    --brass-ink:#271a03;
+    --ok:#86d3a5;
+    --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+    --body:"Figtree","Segoe UI",system-ui,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  }
+  [hidden]{display:none!important}
+  html{height:100%;box-sizing:border-box}
+  *,*::before,*::after{box-sizing:inherit}
+  body{height:100%;margin:0;background:var(--ink);color:var(--text);font-family:var(--body);font-size:15px;line-height:1.45;overflow:hidden}
+  button{font:inherit;color:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+  .app{height:100%;display:flex;flex-direction:column}
+
+  /* ---------- Üst çubuk ---------- */
+  .bar{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:relative;z-index:3}
+  .brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.01em;white-space:nowrap}
+  .brand svg{width:26px;height:26px;flex:none}
+  .stats{display:flex;gap:8px}
+  .stat{display:flex;flex-direction:column;gap:1px;padding:5px 12px 6px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;min-width:84px;transition:opacity .2s}
+  .stat .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-weight:600}
+  .stat .v{font-family:var(--mono);font-weight:700;font-size:17px;font-variant-numeric:tabular-nums;line-height:1.2}
+  .track{display:block;height:3px;border-radius:3px;background:rgba(255,255,255,.08);margin-top:3px;overflow:hidden}
+  .track i{display:block;height:100%;width:0;background:var(--brass);transition:width .35s ease}
+  .idle .stat{opacity:.45}
+  .tools{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+  .tool{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:9px;border:1px solid var(--line);background:transparent;font-size:13.5px;font-weight:600;transition:background .15s,border-color .15s,color .15s}
+  .tool svg{width:17px;height:17px;flex:none}
+  .tool:hover:not(:disabled){background:var(--panel-2)}
+  .tool[aria-pressed="true"]{border-color:var(--brass);color:var(--brass-hi);background:rgba(226,174,74,.08)}
+  .tool.strong{background:var(--brass);border-color:var(--brass);color:var(--brass-ink)}
+  .tool.strong:hover:not(:disabled){background:var(--brass-hi)}
+  .tool:disabled{opacity:.35;cursor:not-allowed}
+
+  /* ---------- Masa ---------- */
+  .stage{flex:1;min-height:0;position:relative;overflow:hidden;
+    background:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.4'/></svg>"),
+      radial-gradient(ellipse 80% 70% at 50% 45%, var(--felt), var(--felt-deep) 100%);
+  }
+  #cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+  .stage.paused #cv{visibility:hidden}
+
+  .overlay{position:absolute;inset:0;display:grid;place-items:center;padding:16px;background:rgba(8,14,12,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);overflow:auto;z-index:4}
+  .card{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.45);padding:22px}
+
+  /* Kurulum */
+  .setup-card{max-width:960px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:26px}
+  .drop{position:relative;display:grid;place-items:center;min-height:240px;padding:12px;border:1.5px dashed rgba(255,255,255,.16);border-radius:14px;background:rgba(0,0,0,.22);cursor:pointer;transition:border-color .15s,background .15s}
+  .drop:hover,.drop.over{border-color:var(--brass);background:rgba(226,174,74,.06)}
+  .drop canvas{display:block;max-width:100%;border-radius:4px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .drop-hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);padding:6px 12px;border-radius:999px;background:rgba(16,24,22,.85);font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s}
+  .drop:hover .drop-hint,.drop.over .drop-hint{opacity:1}
+  .pv-meta{display:flex;justify-content:space-between;gap:12px;margin-top:10px;font-size:13px;color:var(--muted)}
+  .pv-meta span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pv-meta span:last-child{font-family:var(--mono);font-variant-numeric:tabular-nums;flex:none}
+
+  .side{display:flex;flex-direction:column;gap:18px}
+  .eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--brass)}
+  .side h1{margin:4px 0 0;font-family:var(--display);font-weight:800;font-size:clamp(24px,3vw,31px);line-height:1.08;letter-spacing:-.02em;text-wrap:balance}
+  .field{display:flex;flex-direction:column;gap:8px}
+  .label{font-size:11.5px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-weight:700}
+  .field small{color:var(--muted);font-size:12.5px}
+  .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .thumb{padding:0;border:2px solid var(--line);border-radius:9px;overflow:hidden;background:none;width:68px;height:46px;transition:border-color .15s}
+  .thumb canvas{display:block;width:100%;height:100%}
+  .thumb[aria-pressed="true"]{border-color:var(--brass)}
+  .seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .seg button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 4px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);transition:border-color .15s,background .15s}
+  .seg button b{font-weight:700;font-size:14px}
+  .seg button span{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .seg button[aria-checked="true"]{border-color:var(--brass);background:rgba(226,174,74,.12)}
+  .seg button[aria-checked="true"] span{color:var(--brass-hi)}
+  .check{display:flex;align-items:center;gap:9px;font-size:14px;cursor:pointer}
+  .check input{width:17px;height:17px;accent-color:var(--brass);margin:0}
+  .best{font-size:13px;color:var(--muted);padding:9px 12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line)}
+  .best b{color:var(--text);font-family:var(--mono);font-weight:700}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:9px 15px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);font-weight:600;font-size:14px;transition:background .15s,border-color .15s}
+  .btn:hover{border-color:var(--muted)}
+  .btn svg{width:17px;height:17px}
+  .btn.brass{background:var(--brass);border-color:var(--brass);color:var(--brass-ink)}
+  .btn.brass:hover{background:var(--brass-hi);border-color:var(--brass-hi)}
+  .btn.big{padding:13px 22px;font-size:16px;font-weight:700;flex:1}
+
+  /* Duraklatma & bitiş */
+  .mini{max-width:420px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px;padding:28px 24px}
+  .mini h2{margin:0;font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1.1}
+  .mini p{margin:0;color:var(--muted)}
+  .results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
+  .results div{padding:10px 6px;border-radius:12px;background:var(--panel-2);border:1px solid var(--line)}
+  .results .k{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-weight:700}
+  .results .v{display:block;font-family:var(--mono);font-weight:700;font-size:21px;font-variant-numeric:tabular-nums}
+  .record{font-size:13.5px;padding:6px 12px;border-radius:999px;background:rgba(134,211,165,.12);color:var(--ok);font-weight:600}
+  .mini .actions{justify-content:center;width:100%}
+  .mini .btn{flex:1}
+  .win-piece{width:54px;height:54px}
+
+  .peek{position:absolute;right:16px;bottom:16px;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);z-index:2;max-width:min(260px,46%)}
+  .peek canvas{display:block;width:100%;height:auto;border-radius:6px}
+
+  .toast{position:absolute;left:50%;bottom:18px;transform:translate(-50%,10px);max-width:calc(100% - 32px);padding:9px 14px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:6}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (max-width:820px){
+    .setup-card{grid-template-columns:minmax(0,1fr);gap:18px}
+    .drop{min-height:180px}
+  }
+  @media (max-width:760px){
+    .tool .lbl{display:none}
+    .tool{padding:8px 9px}
+    .stats{flex:1}
+    .stat{flex:1;min-width:0}
+    .tools{margin-left:0;width:100%;justify-content:space-between}
+    .brand{font-size:17px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important}
+  }
+</style>
+
+</head>
+<body>
+<div class="app idle" id="app">
+  <header class="bar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#e2ae4a" d="M4 8h7.2a3.4 3.4 0 1 1 6 0H24v6.2a3.4 3.4 0 1 1 0 6V27h-6.4a3.4 3.4 0 1 0-5.6 0H4v-6.6a3.4 3.4 0 1 0 0-5.8z"/></svg>
+      <span>Yapboz Masası</span>
+    </div>
+    <div class="stats" aria-live="off">
+      <div class="stat"><span class="k">Süre</span><span class="v" id="sTime">00:00</span></div>
+      <div class="stat"><span class="k">Hamle</span><span class="v" id="sMoves">0</span></div>
+      <div class="stat"><span class="k">İlerleme</span><span class="v" id="sProg">%0</span><span class="track"><i id="sBar"></i></span></div>
+    </div>
+    <div class="tools">
+      <button class="tool" id="bPeek" aria-pressed="false" title="Resmin küçük önizlemesini göster (Ö)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg><span class="lbl">Önizleme</span></button>
+      <button class="tool" id="bGhost" aria-pressed="false" title="Tahtada silik resmi göster (S)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Silik resim</span></button>
+      <button class="tool" id="bScatter" title="Tek başına duran parçaları masaya yeniden dağıt" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg><span class="lbl">Dağıt</span></button>
+      <button class="tool" id="bPause" title="Duraklat (P)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5v14M15 5v14"/></svg><span class="lbl">Duraklat</span></button>
+      <button class="tool" id="bSound" aria-pressed="true" title="Sesleri aç/kapat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path id="soundWave" d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg><span class="lbl">Ses</span></button>
+      <button class="tool strong" id="bNew">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Yeni oyun</span></button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="cv" aria-label="Yapboz masası: parçaları sürükleyip birleştir"></canvas>
+
+    <div class="peek" id="peek" hidden><canvas id="peekCv"></canvas></div>
+
+    <!-- Kurulum -->
+    <section class="overlay" id="setup" aria-labelledby="setupTitle" hidden>
+      <div class="card setup-card">
+        <div>
+          <div class="drop" id="drop" tabindex="0" role="button" aria-label="Resim yükle: tıkla ya da dosyayı buraya bırak">
+            <canvas id="pv"></canvas>
+            <div class="drop-hint">Tıkla veya resmi buraya bırak</div>
+          </div>
+          <div class="pv-meta"><span id="srcName">Örnek · Gün batımı</span><span id="srcSize">1500 × 1000</span></div>
+        </div>
+        <div class="side">
+          <div>
+            <p class="eyebrow">Yeni yapboz</p>
+            <h1 id="setupTitle">Resmini seç, parçala, yeniden birleştir.</h1>
+          </div>
+          <div class="field">
+            <span class="label">Resim</span>
+            <div class="row">
+              <button class="btn" id="bUpload" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>Resim yükle</button>
+              <input type="file" id="file" accept="image/*" hidden>
+              <button class="thumb" data-sample="sunset" aria-pressed="true" title="Örnek: Gün batımı" aria-label="Örnek resim: Gün batımı"><canvas width="136" height="92"></canvas></button>
+              <button class="thumb" data-sample="mosaic" aria-pressed="false" title="Örnek: Mozaik" aria-label="Örnek resim: Mozaik"><canvas width="136" height="92"></canvas></button>
+            </div>
+            <small>Dosyayı sürükleyip bırakabilir ya da Ctrl+V ile yapıştırabilirsin.</small>
+          </div>
+          <div class="field">
+            <span class="label">Zorluk</span>
+            <div class="seg" id="levels" role="radiogroup" aria-label="Zorluk"></div>
+            <small id="gridInfo"></small>
+          </div>
+          <label class="check"><input type="checkbox" id="optGhost"> Tahtada silik resmi göster (ipucu)</label>
+          <div class="best" id="bestInfo"></div>
+          <div class="actions">
+            <button class="btn" id="bResume" hidden>Oyuna dön</button>
+            <button class="btn brass big" id="bStart">Oyunu Başlat</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Duraklatıldı -->
+    <section class="overlay" id="pauseBox" hidden>
+      <div class="card mini">
+        <h2>Duraklatıldı</h2>
+        <p>Süre durdu. Parçalar seni bekliyor.</p>
+        <div class="actions"><button class="btn brass big" id="bContinue">Devam et</button></div>
+      </div>
+    </section>
+
+    <!-- Bitti -->
+    <section class="overlay" id="winBox" hidden>
+      <div class="card mini">
+        <svg class="win-piece" viewBox="0 0 32 32" aria-hidden="true"><path fill="#e2ae4a" d="M4 8h7.2a3.4 3.4 0 1 1 6 0H24v6.2a3.4 3.4 0 1 1 0 6V27h-6.4a3.4 3.4 0 1 0-5.6 0H4v-6.6a3.4 3.4 0 1 0 0-5.8z"/></svg>
+        <h2>Yapboz tamam!</h2>
+        <p id="winLine">Son parça da yerine oturdu.</p>
+        <div class="results">
+          <div><span class="k">Süre</span><span class="v" id="wTime">00:00</span></div>
+          <div><span class="k">Hamle</span><span class="v" id="wMoves">0</span></div>
+          <div><span class="k">Parça</span><span class="v" id="wPieces">0</span></div>
+        </div>
+        <div class="record" id="wRecord" hidden></div>
+        <div class="actions">
+          <button class="btn" id="bSetup">Yeni resim</button>
+          <button class="btn brass" id="bAgain">Tekrar karıştır</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status"></div>
+  </main>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = s => document.querySelector(s);
+
+  /* ================= Yardımcılar ================= */
+  const LEVELS = [
+    { id: "kolay", name: "Kolay", n: 12 },
+    { id: "orta",  name: "Orta",  n: 35 },
+    { id: "zor",   name: "Zor",   n: 70 },
+    { id: "uzman", name: "Uzman", n: 150 },
+  ];
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  function fmtTime(ms) {
+    const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60;
+    const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+    return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  }
+  let toastTimer = 0;
+  function toast(msg) {
+    const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+  }
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
+
+  /* ================= Parça geometrisi ================= */
+  // Bir çıkıntının (tab) şablonu: u kenar boyunca, v dışarı doğru (kenar birimi)
+  const TAB = [[0.36,0],[0.42,0],[0.44,0.04],[0.40,0.10],[0.34,0.18],[0.36,0.26],[0.50,0.26],
+               [0.64,0.26],[0.66,0.18],[0.60,0.10],[0.56,0.04],[0.58,0],[0.64,0]];
+
+  function gridFor(n, aspect) {
+    let best = null, bs = Infinity;
+    for (let cols = 2; cols <= 40; cols++) {
+      const rows = Math.max(2, Math.round(cols / aspect));
+      const cell = (aspect * rows) / cols;
+      const sc = Math.abs(cols * rows - n) / n + Math.abs(Math.log(cell)) * 0.9;
+      if (sc < bs) { bs = sc; best = { cols, rows }; }
+    }
+    return best;
+  }
+  function makeEdges(cols, rows, rng) {
+    const e = () => ({ s: rng() < 0.5 ? 1 : -1, j: (rng() - 0.5) * 0.14, k: 0.9 + rng() * 0.2 });
+    const h = [], v = [];
+    for (let r = 0; r < rows - 1; r++) { h[r] = []; for (let c = 0; c < cols; c++) h[r][c] = e(); }
+    for (let r = 0; r < rows; r++) { v[r] = []; for (let c = 0; c < cols - 1; c++) v[r][c] = e(); }
+    return { h, v };
+  }
+  // Kanonik yatay kenar: (0,0) -> (L,0); pozitif y = s yönü. Dönüş: P0 + kübik üçlüler
+  function edgePts(L, s, e) {
+    if (!e) return [[0,0],[0,0],[L,0],[L,0]];
+    const cx = L / 2 + e.j * s, sc = s * e.k;
+    const m = TAB.map(([u, v]) => [cx + (u - 0.5) * sc, v * sc * e.s]);
+    const pts = [[0,0],[0,0],m[0],m[0]];
+    for (let i = 1; i < m.length; i++) pts.push(m[i]);
+    pts.push(m[m.length - 1], [L,0], [L,0]);
+    return pts;
+  }
+  function piecePath(r, c, cw, ch, E, cols, rows) {
+    const s = Math.min(cw, ch), p = new Path2D();
+    const top = edgePts(cw, s, r > 0 ? E.h[r-1][c] : null);
+    const right = edgePts(ch, s, c < cols-1 ? E.v[r][c] : null).map(([a, b]) => [cw + b, a]);
+    const bottom = edgePts(cw, s, r < rows-1 ? E.h[r][c] : null).map(([a, b]) => [a, ch + b]).reverse();
+    const left = edgePts(ch, s, c > 0 ? E.v[r][c-1] : null).map(([a, b]) => [b, a]).reverse();
+    p.moveTo(top[0][0], top[0][1]);
+    for (const seg of [top, right, bottom, left])
+      for (let i = 1; i < seg.length; i += 3)
+        p.bezierCurveTo(seg[i][0], seg[i][1], seg[i+1][0], seg[i+1][1], seg[i+2][0], seg[i+2][1]);
+    p.closePath();
+    return p;
+  }
+
+  /* ================= Örnek resimler ================= */
+  function sampleSunset() {
+    const W = 1500, H = 1000, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const x = cv.getContext("2d"), rnd = mulberry32(7), hz = H * 0.62;
+    const sky = x.createLinearGradient(0, 0, 0, hz);
+    sky.addColorStop(0, "#131a47"); sky.addColorStop(0.38, "#4a2a6c"); sky.addColorStop(0.72, "#d6617a"); sky.addColorStop(1, "#ffc56f");
+    x.fillStyle = sky; x.fillRect(0, 0, W, hz);
+    for (let i = 0; i < 260; i++) {
+      const sx = rnd() * W, sy = rnd() * hz * 0.55;
+      x.globalAlpha = (1 - sy / (hz * 0.55)) * (0.3 + 0.7 * rnd()); x.fillStyle = "#fff";
+      x.beginPath(); x.arc(sx, sy, rnd() * 1.7 + 0.5, 0, 7); x.fill();
+    }
+    x.globalAlpha = 1;
+    // hilal
+    const mx = W * 0.15, my = H * 0.15;
+    x.save(); x.beginPath(); x.rect(0, 0, W, H); x.arc(mx + 17, my - 9, 36, 0, Math.PI * 2, true); x.clip();
+    x.fillStyle = "#fbf1d2"; x.beginPath(); x.arc(mx, my, 40, 0, 7); x.fill(); x.restore();
+    // güneş ışıması
+    const sx = W * 0.64, sy = hz - 70, sr = 150;
+    let g = x.createRadialGradient(sx, sy, sr * 0.6, sx, sy, sr * 2.6);
+    g.addColorStop(0, "rgba(255,210,130,.45)"); g.addColorStop(1, "rgba(255,160,120,0)");
+    x.fillStyle = g; x.fillRect(0, 0, W, hz);
+    // şeritli güneş
+    g = x.createLinearGradient(0, sy - sr, 0, sy + sr);
+    g.addColorStop(0, "#fff3a6"); g.addColorStop(0.6, "#ffb05a"); g.addColorStop(1, "#ff7a4a");
+    x.save(); x.beginPath(); x.arc(sx, sy, sr, 0, Math.PI * 2); x.clip();
+    x.fillStyle = g; x.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
+    x.fillStyle = sky;
+    for (let i = 0; i < 7; i++) { const yy = sy - 10 + i * 24, th = 3 + i * 2.2; x.fillRect(sx - sr, yy, sr * 2, th); }
+    x.restore();
+    // bulutlar
+    const cloud = (cx, cy, w, col) => {
+      x.fillStyle = col;
+      for (let i = 0; i < 6; i++) { x.beginPath(); x.ellipse(cx + (i - 2.5) * w * 0.17, cy + Math.sin(i * 1.7) * 6, w * 0.2, w * 0.05, 0, 0, 7); x.fill(); }
+    };
+    cloud(W * 0.3, H * 0.3, 420, "rgba(255,160,190,.32)");
+    cloud(W * 0.82, H * 0.22, 360, "rgba(255,190,210,.25)");
+    cloud(W * 0.48, H * 0.44, 300, "rgba(120,60,130,.35)");
+    // dağlar
+    const ridge = (base, amp, col, seed, freq) => {
+      const r = mulberry32(seed); x.fillStyle = col; x.beginPath(); x.moveTo(0, H);
+      for (let i = 0; i <= 120; i++) {
+        const px = i / 120 * W;
+        const n = Math.abs(Math.sin(i * freq + seed)) * 0.6 + Math.abs(Math.sin(i * freq * 2.7 + seed * 3)) * 0.3 + r() * 0.08;
+        x.lineTo(px, base - amp * n);
+      }
+      x.lineTo(W, H); x.closePath(); x.fill();
+    };
+    ridge(hz, 250, "#8a4a7e", 2, 0.045);
+    ridge(hz, 170, "#5c3170", 5, 0.07);
+    ridge(hz, 95, "#34214f", 9, 0.11);
+    // göl
+    g = x.createLinearGradient(0, hz, 0, H); g.addColorStop(0, "#43305f"); g.addColorStop(1, "#0d1330");
+    x.fillStyle = g; x.fillRect(0, hz, W, H - hz);
+    for (let i = 0; i < 90; i++) {
+      const t = Math.pow(rnd(), 1.4), yy = hz + 6 + t * (H - hz - 10), ww = (1 - t) * 230 * (0.4 + rnd()) + 20;
+      x.fillStyle = `rgba(255,${170 + rnd() * 50 | 0},110,${0.55 * (1 - t) + 0.08})`;
+      x.fillRect(sx - ww / 2 + (rnd() - 0.5) * 60, yy, ww, 2 + rnd() * 3);
+    }
+    // ön kıyılar
+    x.fillStyle = "#0b0e22";
+    x.beginPath(); x.moveTo(0, hz + 40); x.bezierCurveTo(W * 0.18, hz + 30, W * 0.3, H * 0.84, W * 0.42, H); x.lineTo(0, H); x.fill();
+    x.beginPath(); x.moveTo(W, hz + 110); x.bezierCurveTo(W * 0.9, hz + 120, W * 0.84, H * 0.9, W * 0.78, H); x.lineTo(W, H); x.fill();
+    const pine = (px, py, h) => {
+      x.fillStyle = "#0b0e22";
+      for (let i = 0; i < 4; i++) {
+        const w = h * (0.34 - i * 0.06), y0 = py - h * (0.2 + i * 0.22);
+        x.beginPath(); x.moveTo(px, y0 - h * 0.34); x.lineTo(px - w, y0 + h * 0.1); x.lineTo(px + w, y0 + h * 0.1); x.fill();
+      }
+      x.fillRect(px - h * 0.03, py - h * 0.2, h * 0.06, h * 0.2);
+    };
+    [[40,hz+60,230],[120,hz+80,300],[205,hz+95,210],[290,hz+120,260],[360,hz+160,180]].forEach(a => pine(...a));
+    [[W-40,hz+140,260],[W-120,hz+150,200],[W-190,hz+175,240]].forEach(a => pine(...a));
+    // kulübe
+    const kx = 410, ky = hz + 215;
+    x.fillStyle = "#15162e"; x.fillRect(kx, ky - 60, 110, 60);
+    x.beginPath(); x.moveTo(kx - 14, ky - 58); x.lineTo(kx + 55, ky - 110); x.lineTo(kx + 124, ky - 58); x.fill();
+    x.fillStyle = "#ffcf6b"; x.fillRect(kx + 20, ky - 44, 22, 20); x.fillRect(kx + 68, ky - 44, 22, 20);
+    x.fillStyle = "rgba(255,207,107,.25)"; x.fillRect(kx + 18, ky + 20, 26, 60); x.fillRect(kx + 66, ky + 20, 26, 60);
+    // kuşlar
+    x.strokeStyle = "#2a1b3b"; x.lineWidth = 3; x.lineCap = "round";
+    [[900,260,18],[950,240,14],[990,275,12],[860,290,10]].forEach(([bx, by, s]) => {
+      x.beginPath(); x.moveTo(bx - s, by - s * 0.4); x.quadraticCurveTo(bx - s * 0.4, by - s * 0.6, bx, by);
+      x.quadraticCurveTo(bx + s * 0.4, by - s * 0.6, bx + s, by - s * 0.4); x.stroke();
+    });
+    return cv;
+  }
+  function sampleMosaic() {
+    const W = 1400, H = 1000, T = 200, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const x = cv.getContext("2d"), rnd = mulberry32(21);
+    const pal = ["#1d3557","#264653","#2a9d8f","#8ecae6","#e9c46a","#f4a261","#e76f51","#f1faee","#b5838d","#6d597a"];
+    const pick = ex => { let c; do { c = pal[rnd() * pal.length | 0]; } while (ex.includes(c)); return c; };
+    for (let r = 0; r < H / T; r++) for (let c = 0; c < W / T; c++) {
+      const X = c * T, Y = r * T, bg = pick([]), fg = pick([bg]), ac = pick([bg, fg]);
+      x.fillStyle = bg; x.fillRect(X, Y, T, T); x.fillStyle = fg;
+      const type = rnd() * 6 | 0, q = rnd() * 4 | 0;
+      x.save(); x.beginPath(); x.rect(X, Y, T, T); x.clip(); x.beginPath();
+      if (type === 0) { x.arc(X + T/2, Y + T/2, T * 0.36, 0, 7); x.fill(); x.fillStyle = ac; x.beginPath(); x.arc(X + T/2, Y + T/2, T * 0.14, 0, 7); x.fill(); }
+      else if (type === 1) { const cx = X + (q & 1) * T, cy = Y + (q >> 1) * T; x.moveTo(cx, cy); x.arc(cx, cy, T, 0, 7); x.fill(); }
+      else if (type === 2) { const a = q * Math.PI / 2, cx = X + T/2 + Math.cos(a) * T/2, cy = Y + T/2 + Math.sin(a) * T/2; x.arc(cx, cy, T/2, 0, 7); x.fill(); }
+      else if (type === 3) { const k = [[X,Y],[X+T,Y],[X+T,Y+T],[X,Y+T]]; x.moveTo(...k[q]); x.lineTo(...k[(q+1)%4]); x.lineTo(...k[(q+2)%4]); x.fill(); }
+      else if (type === 4) { for (let i = 0; i < 4; i++) q & 1 ? x.fillRect(X + i * T/4, Y, T/8, T) : x.fillRect(X, Y + i * T/4, T, T/8); }
+      else { for (let i = 3; i > 0; i--) { x.fillStyle = i % 2 ? fg : ac; x.beginPath(); x.arc(X + T/2, Y + T/2, T * 0.14 * i, 0, 7); x.fill(); } }
+      x.restore();
+      if (rnd() < 0.35) { x.fillStyle = ac; x.beginPath(); x.arc(X + T * (0.2 + rnd() * 0.6), Y + T * (0.2 + rnd() * 0.6), 9, 0, 7); x.fill(); }
+    }
+    return cv;
+  }
+
+  /* ================= Kaynak resim & kurulum ================= */
+  const pv = $("#pv"), cv = $("#cv"), ctx = cv.getContext("2d"), stage = $("#stage"), app = $("#app");
+  const hctx = document.createElement("canvas").getContext("2d");
+  const samples = {};
+  let source = null, sourceName = "", level = store.get("yapboz-level", 1), pending = null;
+  let soundOn = store.get("yapboz-sound", true);
+
+  function normalize(img) {
+    let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    let sx = 0, sy = 0, sw = w, sh = h;
+    // aşırı uzun/geniş resimleri 3:1 oranına kırp
+    if (sw / sh > 3) { sw = sh * 3; sx = (w - sw) / 2; } else if (sh / sw > 3) { sh = sw * 3; sy = (h - sh) / 2; }
+    const k = Math.min(1, 1800 / Math.max(sw, sh));
+    const c = document.createElement("canvas"); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+    const x = c.getContext("2d"); x.imageSmoothingQuality = "high";
+    x.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    return c;
+  }
+  function setSource(canvas, name, sampleKey) {
+    source = canvas; sourceName = name;
+    document.querySelectorAll(".thumb").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.sample === sampleKey)));
+    $("#srcName").textContent = name;
+    $("#srcSize").textContent = `${canvas.width} × ${canvas.height}`;
+    prepare();
+  }
+  function loadFile(file) {
+    if (!file || !/^image\//.test(file.type)) { toast("Bu dosya bir resim değil. JPG, PNG, WEBP veya GIF seç."); return; }
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { setSource(normalize(img), file.name || "Yapıştırılan resim", null); URL.revokeObjectURL(url); showSetup(); toast("Resim yüklendi. Zorluğu seçip başlatabilirsin."); };
+    img.onerror = () => { URL.revokeObjectURL(url); toast("Resim açılamadı. Başka bir dosya dene."); };
+    img.src = url;
+  }
+  function prepare() {
+    const aspect = source.width / source.height;
+    const { cols, rows } = gridFor(LEVELS[level].n, aspect);
+    pending = { cols, rows, edges: makeEdges(cols, rows, mulberry32((Math.random() * 4294967296) >>> 0)) };
+    renderLevels(); renderPreview(); renderBest();
+    $("#gridInfo").textContent = `${cols} × ${rows} = ${cols * rows} parça`;
+  }
+  function renderLevels() {
+    const box = $("#levels"), aspect = source.width / source.height;
+    box.innerHTML = "";
+    LEVELS.forEach((L, i) => {
+      const g = gridFor(L.n, aspect), b = document.createElement("button");
+      b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(i === level));
+      b.innerHTML = `<b>${L.name}</b><span>${g.cols * g.rows} parça</span>`;
+      b.onclick = () => { level = i; store.set("yapboz-level", i); prepare(); };
+      box.appendChild(b);
+    });
+  }
+  function renderPreview() {
+    const drop = $("#drop"), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const aspect = source.width / source.height;
+    let w = Math.max(160, drop.clientWidth - 24), h = w / aspect;
+    const maxH = Math.max(160, Math.min(440, window.innerHeight * 0.46));
+    if (h > maxH) { h = maxH; w = h * aspect; }
+    pv.width = Math.round(w * dpr); pv.height = Math.round(h * dpr);
+    pv.style.width = w + "px"; pv.style.height = h + "px";
+    const x = pv.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    x.imageSmoothingQuality = "high"; x.drawImage(source, 0, 0, w, h);
+    const { cols, rows, edges } = pending, cw = w / cols, ch = h / rows;
+    x.lineWidth = 1.1; x.strokeStyle = "rgba(255,255,255,.55)"; x.shadowColor = "rgba(0,0,0,.7)"; x.shadowBlur = 2;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      x.save(); x.translate(c * cw, r * ch); x.stroke(piecePath(r, c, cw, ch, edges, cols, rows)); x.restore();
+    }
+  }
+  function renderBest() {
+    const L = LEVELS[level], rec = store.get("yapboz-best", {})[L.id];
+    $("#bestInfo").innerHTML = rec
+      ? `En iyi derecen (${L.name}): <b>${fmtTime(rec.time)}</b> · <b>${rec.moves}</b> hamle`
+      : `${L.name} seviyesinde henüz derecen yok. İlkini sen koy.`;
+  }
+
+  /* ================= Oyun durumu ================= */
+  let G = null, SW = 0, SH = 0, dpr = 1, view = { scale: 1, ox: 0, oy: 0 }, spriteScale = 0;
+  let drag = null, raf = 0, flashes = [], anims = [];
+
+  function layoutBoard(W, H, aspect) {
+    let bw, bh, bx, by;
+    if (H > W * 1.05) {           // dikey ekran: tahta üstte, parçalar altta
+      bw = Math.min(W * 0.92, H * 0.48 * aspect); bh = bw / aspect;
+      bx = (W - bw) / 2; by = Math.max(14, H * 0.035);
+    } else {                      // yatay ekran: tahta ortada, parçalar çevrede
+      bw = Math.min(W * 0.56, H * 0.68 * aspect); bh = bw / aspect;
+      bx = (W - bw) / 2; by = (H - bh) / 2;
+    }
+    return { x: bx, y: by, w: bw, h: bh };
+  }
+  function measureStage() {
+    const r = stage.getBoundingClientRect();
+    SW = r.width; SH = r.height; dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    cv.width = Math.round(SW * dpr); cv.height = Math.round(SH * dpr);
+    if (G) {
+      const sc = Math.min(SW / G.world.w, SH / G.world.h);
+      view = { scale: sc, ox: (SW - G.world.w * sc) / 2, oy: (SH - G.world.h * sc) / 2 };
+    }
+  }
+  function home(p) { return { x: G.board.x + p.c * G.cw, y: G.board.y + p.r * G.ch }; }
+
+  function newGame(R) {
+    measureStage();
+    const aspect = source.width / source.height;
+    const { cols, rows, edges } = R || pending;
+    const world = R ? R.world : { w: SW, h: SH };
+    const board = R ? R.board : layoutBoard(world.w, world.h, aspect);
+    const cw = board.w / cols, ch = board.h / rows, s = Math.min(cw, ch);
+    G = { cols, rows, edges, world, board, cw, ch, s, pad: s * 0.3 + 4,
+          pieces: [], grid: [], groups: new Map(), order: [],
+          moves: R ? R.moves : 0, elapsed: R ? R.elapsed : 0, t0: performance.now(),
+          paused: false, done: false, level: R ? R.level : level,
+          ghost: R ? R.ghost : $("#optGhost").checked, bimg: null, bk: 1 };
+    let id = 0;
+    for (let r = 0; r < rows; r++) {
+      G.grid[r] = [];
+      for (let c = 0; c < cols; c++) {
+        const p = { id, r, c, x: 0, y: 0, g: id, locked: false, sprite: null, path: piecePath(r, c, cw, ch, edges, cols, rows) };
+        G.grid[r][c] = p; G.pieces.push(p); id++;
+      }
+    }
+    if (R) R.pieces.forEach((a, i) => { const p = G.pieces[i]; p.x = a[0]; p.y = a[1]; p.g = a[2]; p.locked = !!a[3]; });
+    else scatter(G.pieces, true);
+    for (const p of G.pieces) { if (!G.groups.has(p.g)) G.groups.set(p.g, []); G.groups.get(p.g).push(p); }
+    G.order = R ? G.pieces.slice() : shuffle(G.pieces.slice());
+    sortLocked();
+    anims = []; flashes = []; drag = null;
+    measureStage(); rebuildSprites();
+    $("#bGhost").setAttribute("aria-pressed", String(G.ghost));
+    hideAll(); app.classList.remove("idle"); setTools(true); updateHud(); requestDraw();
+  }
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function sortLocked() { G.order.sort((a, b) => b.locked - a.locked); }
+
+  function scatter(list, direct) {
+    const { w: W, h: H } = G.world, b = G.board, m = Math.max(6, G.pad * 0.5), gap = G.pad * 0.4;
+    const out = [];
+    for (const p of list) {
+      let x = 0, y = 0;
+      for (let t = 0; t < 80; t++) {
+        x = m + Math.random() * Math.max(1, W - G.cw - 2 * m);
+        y = m + Math.random() * Math.max(1, H - G.ch - 2 * m);
+        if (x + G.cw < b.x - gap || x > b.x + b.w + gap || y + G.ch < b.y - gap || y > b.y + b.h + gap) break;
+      }
+      if (direct) { p.x = x; p.y = y; } else out.push({ p, x, y });
+    }
+    return out;
+  }
+
+  /* ---------- Çizim ---------- */
+  function rebuildSprites() {
+    const S = view.scale * dpr;
+    spriteScale = S;
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(G.board.w * S)); c.height = Math.max(1, Math.round(G.board.h * S));
+    const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(source, 0, 0, c.width, c.height);
+    G.bimg = c; G.bk = c.width / G.board.w;
+    for (const p of G.pieces) renderSprite(p, S);
+  }
+  function renderSprite(p, S) {
+    const pad = G.pad, fw = G.cw + 2 * pad, fh = G.ch + 2 * pad;
+    const c = p.sprite || (p.sprite = document.createElement("canvas"));
+    c.width = Math.ceil(fw * S); c.height = Math.ceil(fh * S);
+    const x = c.getContext("2d");
+    x.setTransform(S, 0, 0, S, pad * S, pad * S);
+    // gölge tabanı
+    x.save(); x.shadowColor = "rgba(0,0,0,.5)"; x.shadowBlur = 3 * dpr; x.shadowOffsetY = 1.5 * dpr;
+    x.fillStyle = "#111"; x.fill(p.path); x.restore();
+    // resim
+    x.save(); x.clip(p.path);
+    const X0 = p.c * G.cw - pad, Y0 = p.r * G.ch - pad, k = G.bk;
+    const ax = Math.max(0, X0), ay = Math.max(0, Y0), bx = Math.min(G.board.w, X0 + fw), by = Math.min(G.board.h, Y0 + fh);
+    x.drawImage(G.bimg, ax * k, ay * k, (bx - ax) * k, (by - ay) * k, ax - p.c * G.cw, ay - p.r * G.ch, bx - ax, by - ay);
+    // karton kabartma
+    const lw = 1 / view.scale;
+    x.lineWidth = 2.4 * lw; x.lineJoin = "round";
+    x.translate(lw, lw); x.strokeStyle = "rgba(255,255,255,.36)"; x.stroke(p.path);
+    x.translate(-2 * lw, -2 * lw); x.strokeStyle = "rgba(0,0,0,.36)"; x.stroke(p.path);
+    x.restore();
+    x.lineWidth = 0.8 * lw; x.strokeStyle = "rgba(0,0,0,.45)"; x.stroke(p.path);
+  }
+  function requestDraw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+  function draw() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (!G) return;
+    const now = performance.now();
+    stepAnims(now);
+    ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * view.ox, dpr * view.oy);
+    const b = G.board, e = 8 / view.scale;
+    // tahta yuvası
+    ctx.fillStyle = "rgba(6,18,14,.38)";
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(b.x - e, b.y - e, b.w + 2 * e, b.h + 2 * e, e) : ctx.rect(b.x - e, b.y - e, b.w + 2 * e, b.h + 2 * e); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.07)"; ctx.lineWidth = 1.5 / view.scale; ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.fillRect(b.x, b.y, b.w, b.h);
+    if (G.ghost) { ctx.globalAlpha = 0.24; ctx.drawImage(G.bimg, b.x, b.y, b.w, b.h); ctx.globalAlpha = 1; }
+    // parçalar
+    const pad = G.pad, lifted = drag ? G.groups.get(drag.g) : null, useShadow = lifted && lifted.length <= 60;
+    for (const p of G.order) {
+      const sw = p.sprite.width / spriteScale, sh = p.sprite.height / spriteScale;
+      if (lifted && p.g === drag.g && useShadow) {
+        ctx.save(); ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 16 * dpr; ctx.shadowOffsetY = 9 * dpr;
+        ctx.drawImage(p.sprite, p.x - pad, p.y - pad, sw, sh); ctx.restore();
+      } else ctx.drawImage(p.sprite, p.x - pad, p.y - pad, sw, sh);
+    }
+    // birleşme parıltısı
+    flashes = flashes.filter(f => now - f.t0 < 750);
+    for (const f of flashes) {
+      const a = 1 - (now - f.t0) / 750;
+      ctx.strokeStyle = `rgba(240,196,110,${a * 0.95})`; ctx.lineWidth = 3 / view.scale;
+      for (const p of f.pieces) { ctx.save(); ctx.translate(p.x, p.y); ctx.stroke(p.path); ctx.restore(); }
+    }
+    if (flashes.length || anims.length) requestDraw();
+  }
+  function stepAnims(now) {
+    anims = anims.filter(a => {
+      const k = a.dur ? Math.min(1, (now - a.t0) / a.dur) : 1, e = 1 - Math.pow(1 - k, 3);
+      for (const it of a.items) { it.p.x = it.fx + (it.x - it.fx) * e; it.p.y = it.fy + (it.y - it.fy) * e; }
+      if (k >= 1) { a.done && a.done(); return false; }
+      return true;
+    });
+  }
+  function tweenTo(items, dur, done) {
+    for (const it of items) { it.fx = it.p.x; it.fy = it.p.y; }
+    anims.push({ items, t0: performance.now(), dur: reduceMotion ? 0 : dur, done });
+    requestDraw();
+  }
+
+  /* ---------- Etkileşim ---------- */
+  function toWorld(e) {
+    const r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left - view.ox) / view.scale, y: (e.clientY - r.top - view.oy) / view.scale };
+  }
+  function hit(w) {
+    for (let i = G.order.length - 1; i >= 0; i--) {
+      const p = G.order[i], lx = w.x - p.x, ly = w.y - p.y;
+      if (lx < -G.pad || ly < -G.pad || lx > G.cw + G.pad || ly > G.ch + G.pad) continue;
+      if (hctx.isPointInPath(p.path, lx, ly)) return p.locked ? null : p;
+    }
+    return null;
+  }
+  const playing = () => G && !G.paused && !G.done && $("#setup").hidden;
+
+  cv.addEventListener("pointerdown", e => {
+    if (!playing() || drag) return;
+    audio();
+    const w = toWorld(e), p = hit(w);
+    if (!p) return;
+    e.preventDefault();
+    const grp = G.groups.get(p.g);
+    anims.forEach(a => a.items = a.items.filter(it => it.p.g !== p.g));
+    drag = { g: p.g, last: w, dist: 0, id: e.pointerId };
+    G.order = G.order.filter(q => q.g !== p.g).concat(grp);
+    cv.setPointerCapture(e.pointerId); cv.style.cursor = "grabbing";
+    requestDraw();
+  });
+  cv.addEventListener("pointermove", e => {
+    if (!G) return;
+    const w = toWorld(e);
+    if (!drag) { cv.style.cursor = playing() && hit(w) ? "grab" : "default"; return; }
+    if (e.pointerId !== drag.id) return;
+    w.x = clamp(w.x, 0, G.world.w); w.y = clamp(w.y, 0, G.world.h);
+    const dx = w.x - drag.last.x, dy = w.y - drag.last.y;
+    drag.dist += Math.hypot(dx, dy) * view.scale; drag.last = w;
+    for (const p of G.groups.get(drag.g)) { p.x += dx; p.y += dy; }
+    requestDraw();
+  });
+  const endDrag = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag; drag = null; cv.style.cursor = "grab";
+    if (d.dist > 4) { G.moves++; }
+    settle(d.g);
+    updateHud(); requestDraw();
+  };
+  cv.addEventListener("pointerup", endDrag);
+  cv.addEventListener("pointercancel", endDrag);
+
+  function neighbors(p) {
+    const o = [], { r, c } = p;
+    if (r > 0) o.push(G.grid[r-1][c]);
+    if (r < G.rows - 1) o.push(G.grid[r+1][c]);
+    if (c > 0) o.push(G.grid[r][c-1]);
+    if (c < G.cols - 1) o.push(G.grid[r][c+1]);
+    return o;
+  }
+  const isLocked = gid => G.groups.get(gid)[0].locked;
+  function shiftGroup(gid, dx, dy) { for (const p of G.groups.get(gid)) { p.x += dx; p.y += dy; } }
+  function merge(a, b) {
+    const A = G.groups.get(a), B = G.groups.get(b), locked = A[0].locked || B[0].locked;
+    for (const p of B) { p.g = a; A.push(p); }
+    G.groups.delete(b);
+    if (locked) for (const p of A) p.locked = true;
+  }
+  function settle(gid) {
+    const tol = G.s * 0.3, joined = [];
+    let placed = false, changed = true;
+    while (changed) {
+      changed = false;
+      const grp = G.groups.get(gid);
+      if (!grp[0].locked) {
+        for (const p of grp) {
+          const h = home(p);
+          if (Math.hypot(p.x - h.x, p.y - h.y) < tol) {
+            shiftGroup(gid, h.x - p.x, h.y - p.y);
+            for (const q of grp) q.locked = true;
+            placed = changed = true; joined.push(...grp); break;
+          }
+        }
+      }
+      outer: for (const p of G.groups.get(gid)) {
+        for (const q of neighbors(p)) {
+          if (q.g === gid) continue;
+          const ex = p.x + (q.c - p.c) * G.cw, ey = p.y + (q.r - p.r) * G.ch;
+          if (Math.hypot(q.x - ex, q.y - ey) < tol) {
+            const bothLocked = isLocked(gid) && isLocked(q.g);
+            if (!bothLocked) {
+              if (isLocked(gid)) shiftGroup(q.g, ex - q.x, ey - q.y);
+              else shiftGroup(gid, q.x - ex, q.y - ey);
+              joined.push(p, q);
+            }
+            merge(gid, q.g); changed = true; break outer;
+          }
+        }
+      }
+    }
+    if (joined.length) {
+      flashes.push({ pieces: [...new Set(joined)], t0: performance.now() });
+      click(placed);
+    }
+    sortLocked();
+    if (G.groups.size === 1) finish();
+  }
+
+  /* ---------- Bitiş ---------- */
+  function finish() {
+    if (G.done) return;
+    G.elapsed = elapsed(); G.done = true;
+    const grp = G.pieces, needMove = !grp[0].locked;
+    const reveal = () => {
+      for (const p of grp) p.locked = true;
+      flashes.push({ pieces: grp.slice(), t0: performance.now() });
+      chime(); updateHud(); requestDraw();
+      setTimeout(showWin, reduceMotion ? 0 : 900);
+    };
+    if (needMove) tweenTo(grp.map(p => ({ p, ...home(p) })), 600, reveal); else reveal();
+  }
+  function showWin() {
+    const L = LEVELS[G.level], n = G.pieces.length, all = store.get("yapboz-best", {}), prev = all[L.id];
+    $("#wTime").textContent = fmtTime(G.elapsed);
+    $("#wMoves").textContent = G.moves;
+    $("#wPieces").textContent = n;
+    $("#winLine").textContent = `${L.name} seviyesi · ${G.cols} × ${G.rows} yapboz`;
+    const rec = $("#wRecord"), notes = [];
+    const best = prev ? { time: Math.min(prev.time, G.elapsed), moves: Math.min(prev.moves, G.moves) } : { time: G.elapsed, moves: G.moves };
+    if (!prev) notes.push("Bu seviyedeki ilk derecen kaydedildi");
+    else {
+      if (G.elapsed < prev.time) notes.push("Yeni süre rekoru");
+      if (G.moves < prev.moves) notes.push("En az hamle rekoru");
+    }
+    all[L.id] = best; store.set("yapboz-best", all);
+    rec.hidden = !notes.length; rec.textContent = notes.join(" · ");
+    $("#winBox").hidden = false;
+    $("#bAgain").focus();
+  }
+
+  /* ---------- HUD, zaman, düğmeler ---------- */
+  function elapsed() { return G ? G.elapsed + (!G.paused && !G.done && $("#setup").hidden ? performance.now() - G.t0 : 0) : 0; }
+  function updateHud() {
+    if (!G) return;
+    const n = G.pieces.length, prog = Math.round((n - G.groups.size) / (n - 1) * 100);
+    $("#sMoves").textContent = G.moves;
+    $("#sProg").textContent = "%" + prog;
+    $("#sBar").style.width = prog + "%";
+    $("#sTime").textContent = fmtTime(elapsed());
+  }
+  setInterval(() => { if (G && !G.done) $("#sTime").textContent = fmtTime(elapsed()); }, 250);
+
+  function freezeClock() { if (G && !G.paused && !G.done) { G.elapsed = elapsed(); } }
+  function pause() {
+    if (!G || G.done || G.paused) return;
+    freezeClock(); G.paused = true; drag = null;
+    stage.classList.add("paused"); $("#pauseBox").hidden = false; $("#bContinue").focus();
+  }
+  function resume() {
+    if (!G || !G.paused) return;
+    G.paused = false; G.t0 = performance.now();
+    stage.classList.remove("paused"); $("#pauseBox").hidden = true; requestDraw();
+  }
+  function hideAll() {
+    $("#setup").hidden = true; $("#pauseBox").hidden = true; $("#winBox").hidden = true;
+    stage.classList.remove("paused");
+  }
+  function showSetup() {
+    if (!$("#setup").hidden) return;
+    freezeClock();
+    $("#bResume").hidden = !(G && !G.done);
+    $("#winBox").hidden = true; $("#pauseBox").hidden = true;
+    $("#setup").hidden = false;
+    renderPreview();
+  }
+  function setTools(on) { ["#bPeek", "#bGhost", "#bScatter", "#bPause"].forEach(s => $(s).disabled = !on); }
+
+  $("#bNew").onclick = () => showSetup();
+  $("#bStart").onclick = () => { audio(); newGame(); };
+  $("#bResume").onclick = () => { $("#setup").hidden = true; if (G) { G.t0 = performance.now(); if (G.paused) resume(); } requestDraw(); };
+  $("#bPause").onclick = pause;
+  $("#bContinue").onclick = resume;
+  $("#bAgain").onclick = () => { prepareFor(G.level); newGame(); };
+  $("#bSetup").onclick = () => { $("#winBox").hidden = true; showSetup(); };
+  function prepareFor(l) { level = l; prepare(); }
+  $("#bGhost").onclick = () => {
+    if (!G) return; G.ghost = !G.ghost;
+    $("#bGhost").setAttribute("aria-pressed", String(G.ghost)); $("#optGhost").checked = G.ghost; requestDraw();
+  };
+  $("#bPeek").onclick = () => {
+    const pk = $("#peek"), show = pk.hidden;
+    pk.hidden = !show; $("#bPeek").setAttribute("aria-pressed", String(show));
+    if (show) {
+      const c = $("#peekCv"), w = 260, h = Math.round(w * source.height / source.width), d = Math.min(window.devicePixelRatio || 1, 2);
+      c.width = w * d; c.height = h * d; c.getContext("2d").drawImage(source, 0, 0, c.width, c.height);
+    }
+  };
+  $("#bScatter").onclick = () => {
+    if (!playing()) return;
+    const loose = G.pieces.filter(p => !p.locked && G.groups.get(p.g).length === 1);
+    if (!loose.length) { toast("Dağıtılacak tek parça kalmadı."); return; }
+    tweenTo(scatter(loose, false), 450);
+    G.order = G.order.filter(p => !loose.includes(p)).concat(shuffle(loose)); sortLocked();
+    toast(`${loose.length} parça masaya yeniden dağıtıldı.`);
+  };
+  $("#bSound").onclick = () => {
+    soundOn = !soundOn; store.set("yapboz-sound", soundOn); syncSound();
+    if (soundOn) { audio(); click(false); }
+  };
+  function syncSound() { $("#bSound").setAttribute("aria-pressed", String(soundOn)); $("#soundWave").style.display = soundOn ? "" : "none"; }
+
+  // Kurulum etkileşimleri
+  const fileIn = $("#file"), drop = $("#drop");
+  $("#bUpload").onclick = () => fileIn.click();
+  drop.onclick = () => fileIn.click();
+  drop.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileIn.click(); } };
+  fileIn.onchange = () => { loadFile(fileIn.files[0]); fileIn.value = ""; };
+  ["dragenter", "dragover"].forEach(t => window.addEventListener(t, e => { e.preventDefault(); if ($("#setup").hidden === false) drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(t => window.addEventListener(t, e => { e.preventDefault(); if (t === "drop" || e.relatedTarget === null) drop.classList.remove("over"); }));
+  window.addEventListener("drop", e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) loadFile(f); });
+  window.addEventListener("paste", e => {
+    const items = e.clipboardData ? [...e.clipboardData.items] : [];
+    const it = items.find(i => i.kind === "file" && /^image\//.test(i.type));
+    if (it) { e.preventDefault(); loadFile(it.getAsFile()); }
+  });
+  document.querySelectorAll(".thumb").forEach(b => {
+    const key = b.dataset.sample;
+    b.querySelector("canvas").getContext("2d").drawImage(samples[key] || (samples[key] = key === "sunset" ? sampleSunset() : sampleMosaic()), 0, 0, 136, 92);
+    b.onclick = () => setSource(samples[key], key === "sunset" ? "Örnek · Gün batımı" : "Örnek · Mozaik", key);
+  });
+  $("#optGhost").checked = store.get("yapboz-ghost", false);
+  $("#optGhost").onchange = () => store.set("yapboz-ghost", $("#optGhost").checked);
+
+  // Klavye kısayolları
+  window.addEventListener("keydown", e => {
+    if (e.target.closest && e.target.closest("input,textarea")) return;
+    if (!G || G.done || !$("#setup").hidden) return;
+    const k = e.key.toLowerCase();
+    if (k === "p") G.paused ? resume() : pause();
+    else if (k === "s" && !G.paused) $("#bGhost").click();
+    else if (k === "ö" && !G.paused) $("#bPeek").click();
+  });
+  document.addEventListener("visibilitychange", () => { if (document.hidden && playing()) pause(); });
+
+  // Boyut değişimi
+  let rsTimer = 0;
+  new ResizeObserver(() => {
+    measureStage(); requestDraw();
+    clearTimeout(rsTimer);
+    rsTimer = setTimeout(() => {
+      if (G && Math.abs(view.scale * dpr - spriteScale) > 0.01) { rebuildSprites(); requestDraw(); }
+      if (!$("#setup").hidden && source) renderPreview();
+    }, 120);
+  }).observe(stage);
+
+  /* ================= Ses ================= */
+  let actx = null;
+  function audio() {
+    if (!soundOn) return null;
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+    } catch (e) { actx = null; }
+    return actx;
+  }
+  function tone(freq, t, dur, type, vol, to) {
+    const a = actx, o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur * 0.7);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function click(big) {
+    if (!soundOn || !audio()) return;
+    const t = actx.currentTime;
+    tone(big ? 440 : 900, t, 0.11, "triangle", 0.22, big ? 220 : 480);
+    if (big) tone(660, t + 0.05, 0.12, "sine", 0.12);
+  }
+  function chime() {
+    if (!soundOn || !audio()) return;
+    const t = actx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, t + i * 0.11, 0.5, "sine", 0.18));
+  }
+
+  /* ================= Başlangıç (canlı güncellemede oyunu korur) ================= */
+  function snapshot() {
+    if (!G || G.done) return {};
+    try {
+      return { game: { src: source.toDataURL("image/jpeg", 0.9), name: sourceName, level: G.level,
+        cols: G.cols, rows: G.rows, edges: G.edges, world: G.world, board: G.board,
+        pieces: G.pieces.map(p => [p.x, p.y, p.g, p.locked ? 1 : 0]), moves: G.moves, elapsed: elapsed(), ghost: G.ghost } };
+    } catch (e) { return {}; }
+  }
+  function boot(data) {
+    syncSound();
+    setSource(samples.sunset, "Örnek · Gün batımı", "sunset");
+    const R = data && data.game;
+    if (R) {
+      const img = new Image();
+      img.onload = () => { level = R.level; setSource(normalize(img), R.name, null); newGame(R); };
+      img.src = R.src;
+    } else {
+      // İlk açılışta parçalar karışık halde masaya dağılır, oyun hemen başlar
+      requestAnimationFrame(() => newGame());
+    }
+  }
+  if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(snapshot);
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>
